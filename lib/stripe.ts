@@ -40,20 +40,51 @@ function monthlyAmount(price: Stripe.Price | null): number {
 
 export async function getSubscriptions(): Promise<SubRow[]> {
   if (!stripeConfigured()) return [];
-  const rows: SubRow[] = [];
+
+  // Stripe limite l'expand a 4 niveaux : on va jusqu'a data.items.data.price
+  // (le produit reste un ID), puis on recupere les noms de produits a part.
+  type Raw = { sub: Stripe.Subscription; price: Stripe.Price | null; productId: string | null };
+  const raw: Raw[] = [];
+  const productNames = new Map<string, string>();
+  const toFetch = new Set<string>();
+
   const subs = stripe().subscriptions.list({
     status: "all",
     limit: 100,
-    expand: ["data.customer", "data.items.data.price.product"],
+    expand: ["data.customer", "data.items.data.price"],
   });
+
   for await (const sub of subs) {
     const item = sub.items.data[0];
     const price = item?.price ?? null;
     const product = price?.product;
-    let offer = "Abonnement";
-    if (product && typeof product !== "string" && !("deleted" in product && product.deleted)) {
-      offer = (product as Stripe.Product).name ?? offer;
+    let productId: string | null = null;
+    if (typeof product === "string") {
+      productId = product;
+      toFetch.add(product);
+    } else if (product && !("deleted" in product && product.deleted)) {
+      const p = product as Stripe.Product;
+      productId = p.id;
+      if (p.name) productNames.set(p.id, p.name);
     }
+    raw.push({ sub, price, productId });
+  }
+
+  // recupere les noms des produits manquants (quelques-uns au plus)
+  await Promise.all(
+    [...toFetch].map(async (id) => {
+      if (productNames.has(id)) return;
+      try {
+        const p = await stripe().products.retrieve(id);
+        if (!("deleted" in p && p.deleted) && p.name) productNames.set(id, p.name);
+      } catch {
+        /* ignore : on retombera sur un libelle par defaut */
+      }
+    })
+  );
+
+  const rows: SubRow[] = raw.map(({ sub, price, productId }) => {
+    const offer = (productId && productNames.get(productId)) || price?.nickname || "Abonnement";
     const customer = sub.customer;
     let client = "Client inconnu";
     let email: string | null = null;
@@ -62,7 +93,7 @@ export async function getSubscriptions(): Promise<SubRow[]> {
       client = c.name || c.email || c.id;
       email = c.email ?? null;
     }
-    rows.push({
+    return {
       id: sub.id,
       client,
       email,
@@ -72,9 +103,9 @@ export async function getSubscriptions(): Promise<SubRow[]> {
       interval: price?.recurring?.interval ?? "—",
       status: sub.status,
       currentPeriodEnd: sub.current_period_end,
-    });
-  }
-  // tri : actifs d'abord, puis par echeance
+    };
+  });
+
   const rank: Record<string, number> = { active: 0, trialing: 1, past_due: 2, unpaid: 3, paused: 4, canceled: 5, incomplete: 6, incomplete_expired: 7 };
   rows.sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.currentPeriodEnd - b.currentPeriodEnd);
   return rows;
