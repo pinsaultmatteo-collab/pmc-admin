@@ -5,7 +5,7 @@ import { startOfYear } from "./format";
 // Date de reprise de l'agence : on n'affiche que les abonnements créés à
 // partir de cette date (les abonnements antérieurs = ancien propriétaire).
 // Pour changer la date, modifie UNIQUEMENT la ligne ci-dessous (format AAAA-MM-JJ).
-const AGENCY_TAKEOVER = new Date("2026-07-20T00:00:00Z");
+const AGENCY_TAKEOVER = new Date("2026-04-20T00:00:00Z");
 // ---------------------------------------------------------------------------
 
 export type SubRow = {
