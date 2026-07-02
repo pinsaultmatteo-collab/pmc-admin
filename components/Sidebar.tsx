@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  Users,
   CreditCard,
   TrendingUp,
+  FileText,
   Globe,
   CheckSquare,
   Megaphone,
@@ -14,8 +16,10 @@ import {
 
 const NAV = [
   { href: "/", label: "Vue d'ensemble", icon: LayoutDashboard },
+  { href: "/crm", label: "CRM", icon: Users },
   { href: "/abonnements", label: "Abonnements", icon: CreditCard },
   { href: "/ca", label: "Chiffre d'affaires", icon: TrendingUp },
+  { href: "/facturation", label: "Devis & Factures", icon: FileText },
   { href: "/sites", label: "Sites clients", icon: Globe },
   { href: "/todos", label: "To-do sites", icon: CheckSquare },
   { href: "/campagnes", label: "Campagnes pub", icon: Megaphone },

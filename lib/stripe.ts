@@ -1,11 +1,12 @@
 import Stripe from "stripe";
 import { startOfYear } from "./format";
+import type { DocRow } from "./qonto";
 
 // ---------------------------------------------------------------------------
 // Date de reprise de l'agence : on n'affiche que les abonnements créés à
 // partir de cette date (les abonnements antérieurs = ancien propriétaire).
 // Pour changer la date, modifie UNIQUEMENT la ligne ci-dessous (format AAAA-MM-JJ).
-const AGENCY_TAKEOVER = new Date("2026-04-20T00:00:00Z");
+const AGENCY_TAKEOVER = new Date("2026-07-20T00:00:00Z");
 // ---------------------------------------------------------------------------
 
 export type SubRow = {
@@ -169,4 +170,34 @@ export async function getRevenueYTD(): Promise<{ gross: number; currency: string
     }
   }
   return { gross, currency: currency.toUpperCase() };
+}
+
+// Factures Stripe (les 100 plus recentes), normalisees au format DocRow
+export async function getStripeInvoices(): Promise<DocRow[]> {
+  if (!stripeConfigured()) return [];
+  const rows: DocRow[] = [];
+  const invoices = stripe().invoices.list({ limit: 100, expand: ["data.customer"] });
+  for await (const inv of invoices) {
+    let client = "—";
+    const c = inv.customer;
+    if (c && typeof c !== "string" && !("deleted" in c && c.deleted)) {
+      const cust = c as Stripe.Customer;
+      client = cust.name || cust.email || cust.id;
+    } else {
+      client = inv.customer_name || inv.customer_email || "—";
+    }
+    rows.push({
+      id: inv.id,
+      source: "stripe",
+      kind: "invoice",
+      number: inv.number ?? inv.id,
+      client,
+      amount: (inv.total ?? 0) / 100,
+      currency: (inv.currency ?? "eur").toUpperCase(),
+      status: inv.status ?? "—",
+      date: inv.created ? new Date(inv.created * 1000).toISOString() : null,
+      url: inv.hosted_invoice_url ?? null,
+    });
+  }
+  return rows;
 }

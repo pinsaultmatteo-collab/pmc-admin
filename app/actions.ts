@@ -83,6 +83,52 @@ export async function deleteCampaign(id: string) {
   revalidatePath("/");
 }
 
+// ---- CRM / Prospects ----
+export async function addProspect(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  await db().from("prospects").insert({
+    name,
+    company: String(formData.get("company") ?? "").trim() || null,
+    email: String(formData.get("email") ?? "").trim() || null,
+    phone: String(formData.get("phone") ?? "").trim() || null,
+    value: numOrNull(formData.get("value")),
+    stage: String(formData.get("stage") ?? "nouveau"),
+  });
+  revalidatePath("/crm");
+  revalidatePath("/");
+}
+
+export async function updateProspectStage(id: string, stage: string) {
+  await db().from("prospects").update({ stage, updated_at: new Date().toISOString() }).eq("id", id);
+  revalidatePath("/crm");
+  revalidatePath("/");
+}
+
+export async function updateProspect(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+  await db()
+    .from("prospects")
+    .update({
+      name: String(formData.get("name") ?? "").trim(),
+      company: String(formData.get("company") ?? "").trim() || null,
+      email: String(formData.get("email") ?? "").trim() || null,
+      phone: String(formData.get("phone") ?? "").trim() || null,
+      value: numOrNull(formData.get("value")),
+      note: String(formData.get("note") ?? "").trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  revalidatePath("/crm");
+}
+
+export async function deleteProspect(id: string) {
+  await db().from("prospects").delete().eq("id", id);
+  revalidatePath("/crm");
+  revalidatePath("/");
+}
+
 // ---- Factu ponctuelle ----
 export async function addManualRevenue(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();

@@ -24,6 +24,20 @@ export type Campaign = {
   created_at: string;
 };
 
+export type Prospect = {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  value: number | null;
+  stage: string;
+  position: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ManualRevenue = {
   id: string;
   label: string;
@@ -71,6 +85,17 @@ export async function getCampaigns(): Promise<Campaign[]> {
     .order("start_date", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as Campaign[];
+}
+
+export async function getProspects(): Promise<Prospect[]> {
+  if (!supabaseConfigured()) return [];
+  const { data, error } = await supabase()
+    .from("prospects")
+    .select("*")
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Prospect[];
 }
 
 export async function getManualRevenue(year: number): Promise<ManualRevenue[]> {

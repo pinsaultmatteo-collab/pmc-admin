@@ -47,3 +47,19 @@ alter table public.todos          enable row level security;
 alter table public.campaigns      enable row level security;
 alter table public.manual_revenue enable row level security;
 -- Aucune policy publique : seule la service_role (qui bypasse la RLS) peut lire/écrire.
+
+-- CRM : prospects (pipeline commercial)
+create table if not exists public.prospects (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  company     text,
+  email       text,
+  phone       text,
+  value       numeric,
+  stage       text not null default 'nouveau',
+  position    integer not null default 0,
+  note        text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+alter table public.prospects enable row level security;
