@@ -3,16 +3,15 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html, body {
-  background: #0e0e10;
-  color: #ededf0;
+  background: #ffffff;
+  color: #17171a;
 }
 
 body {
-  font-feature-settings: "ss01";
   -webkit-font-smoothing: antialiased;
 }
 
@@ -21,11 +20,11 @@ body {
     @apply font-mono text-[11px] uppercase tracking-[0.18em] text-accent;
   }
   .card {
-    @apply rounded-xl border border-border bg-surface;
+    @apply rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(17,17,26,0.04)];
   }
   .field {
-    @apply w-full rounded-lg border border-border bg-base px-3 py-2 text-sm text-ink
-           placeholder:text-faint outline-none focus:border-accent/70 transition-colors;
+    @apply w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-ink
+           placeholder:text-faint outline-none focus:border-accent/70 focus:bg-white transition-colors;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors;
@@ -42,7 +41,7 @@ body {
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2a2a31; border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: #d4d4dc; border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 @media (prefers-reduced-motion: reduce) {

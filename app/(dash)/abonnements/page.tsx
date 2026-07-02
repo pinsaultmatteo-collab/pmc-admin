@@ -54,7 +54,7 @@ export default async function AbonnementsPage() {
                   <th className="px-4 py-3 font-normal">Offre</th>
                   <th className="px-4 py-3 font-normal text-right">Montant / mois</th>
                   <th className="px-4 py-3 font-normal">Statut</th>
-                  <th className="px-4 py-3 font-normal">Prochaine échéance</th>
+                  <th className="px-4 py-3 font-normal">Renouvellement</th>
                 </tr>
               </thead>
               <tbody>

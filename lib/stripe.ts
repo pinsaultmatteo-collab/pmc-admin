@@ -1,16 +1,23 @@
 import Stripe from "stripe";
 import { startOfYear } from "./format";
 
+// ---------------------------------------------------------------------------
+// Date de reprise de l'agence : on n'affiche que les abonnements créés à
+// partir de cette date (les abonnements antérieurs = ancien propriétaire).
+// Pour changer la date, modifie UNIQUEMENT la ligne ci-dessous (format AAAA-MM-JJ).
+const AGENCY_TAKEOVER = new Date("2026-07-20T00:00:00Z");
+// ---------------------------------------------------------------------------
+
 export type SubRow = {
   id: string;
   client: string;
   email: string | null;
   offer: string;
-  amount: number; // par mois, en euros
+  amount: number; // par mois, en euros (toutes lignes x quantité)
   currency: string;
   interval: string;
   status: Stripe.Subscription.Status;
-  currentPeriodEnd: number; // timestamp (s)
+  currentPeriodEnd: number; // timestamp (s) = date de renouvellement
 };
 
 export type OfferMrr = { offer: string; count: number; mrr: number };
@@ -27,7 +34,8 @@ function stripe(): Stripe {
   return _stripe;
 }
 
-function monthlyAmount(price: Stripe.Price | null): number {
+// montant mensuel d'une ligne (hors quantité)
+function monthlyUnit(price: Stripe.Price | null): number {
   if (!price || price.unit_amount == null) return 0;
   const base = price.unit_amount / 100;
   const interval = price.recurring?.interval;
@@ -41,9 +49,17 @@ function monthlyAmount(price: Stripe.Price | null): number {
 export async function getSubscriptions(): Promise<SubRow[]> {
   if (!stripeConfigured()) return [];
 
-  // Stripe limite l'expand a 4 niveaux : on va jusqu'a data.items.data.price
-  // (le produit reste un ID), puis on recupere les noms de produits a part.
-  type Raw = { sub: Stripe.Subscription; price: Stripe.Price | null; productId: string | null };
+  const cutoff = Math.floor(AGENCY_TAKEOVER.getTime() / 1000);
+
+  // Stripe limite l'expand à 4 niveaux : on va jusqu'à data.items.data.price
+  // (le produit reste un ID), puis on récupère les noms de produits à part.
+  type Raw = {
+    sub: Stripe.Subscription;
+    amount: number;
+    currency: string;
+    interval: string;
+    productIds: string[];
+  };
   const raw: Raw[] = [];
   const productNames = new Map<string, string>();
   const toFetch = new Set<string>();
@@ -55,22 +71,35 @@ export async function getSubscriptions(): Promise<SubRow[]> {
   });
 
   for await (const sub of subs) {
-    const item = sub.items.data[0];
-    const price = item?.price ?? null;
-    const product = price?.product;
-    let productId: string | null = null;
-    if (typeof product === "string") {
-      productId = product;
-      toFetch.add(product);
-    } else if (product && !("deleted" in product && product.deleted)) {
-      const p = product as Stripe.Product;
-      productId = p.id;
-      if (p.name) productNames.set(p.id, p.name);
+    // filtre : on ignore les abonnements antérieurs à la reprise
+    if (sub.created < cutoff) continue;
+
+    let amount = 0;
+    let currency = "eur";
+    let interval = "—";
+    const productIds: string[] = [];
+
+    for (const item of sub.items.data) {
+      const price = item.price ?? null;
+      const qty = item.quantity ?? 1;
+      amount += monthlyUnit(price) * qty;
+      if (price?.currency) currency = price.currency;
+      if (price?.recurring?.interval) interval = price.recurring.interval;
+      const product = price?.product;
+      if (typeof product === "string") {
+        productIds.push(product);
+        toFetch.add(product);
+      } else if (product && !("deleted" in product && product.deleted)) {
+        const p = product as Stripe.Product;
+        productIds.push(p.id);
+        if (p.name) productNames.set(p.id, p.name);
+      }
     }
-    raw.push({ sub, price, productId });
+
+    raw.push({ sub, amount, currency: currency.toUpperCase(), interval, productIds });
   }
 
-  // recupere les noms des produits manquants (quelques-uns au plus)
+  // récupère les noms des produits manquants (quelques-uns au plus)
   await Promise.all(
     [...toFetch].map(async (id) => {
       if (productNames.has(id)) return;
@@ -78,13 +107,15 @@ export async function getSubscriptions(): Promise<SubRow[]> {
         const p = await stripe().products.retrieve(id);
         if (!("deleted" in p && p.deleted) && p.name) productNames.set(id, p.name);
       } catch {
-        /* ignore : on retombera sur un libelle par defaut */
+        /* on retombera sur un libellé par défaut */
       }
     })
   );
 
-  const rows: SubRow[] = raw.map(({ sub, price, productId }) => {
-    const offer = (productId && productNames.get(productId)) || price?.nickname || "Abonnement";
+  const rows: SubRow[] = raw.map(({ sub, amount, currency, interval, productIds }) => {
+    const names = [...new Set(productIds.map((id) => productNames.get(id)).filter(Boolean))] as string[];
+    const offer = names.length ? names.join(" + ") : "Abonnement";
+
     const customer = sub.customer;
     let client = "Client inconnu";
     let email: string | null = null;
@@ -93,14 +124,15 @@ export async function getSubscriptions(): Promise<SubRow[]> {
       client = c.name || c.email || c.id;
       email = c.email ?? null;
     }
+
     return {
       id: sub.id,
       client,
       email,
       offer,
-      amount: monthlyAmount(price),
-      currency: (price?.currency ?? "eur").toUpperCase(),
-      interval: price?.recurring?.interval ?? "—",
+      amount,
+      currency,
+      interval,
       status: sub.status,
       currentPeriodEnd: sub.current_period_end,
     };
@@ -123,7 +155,7 @@ export function mrrByOffer(subs: SubRow[]): OfferMrr[] {
   return [...map.values()].sort((a, b) => b.mrr - a.mrr);
 }
 
-// CA encaisse depuis le 1er janvier (charges reussies, net des remboursements)
+// CA encaissé depuis le 1er janvier (charges réussies, net des remboursements)
 export async function getRevenueYTD(): Promise<{ gross: number; currency: string }> {
   if (!stripeConfigured()) return { gross: 0, currency: "EUR" };
   const since = Math.floor(startOfYear().getTime() / 1000);
